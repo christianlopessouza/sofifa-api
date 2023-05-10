@@ -1,20 +1,15 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
 const timeout = require('connect-timeout');
-
-
-
-
 const app = express();
 const port = 3000;
-app.timeout = 120000; // tempo em milissegundos (2 minutos)
 
 
 
 let browser, page;
 async function startServer() {
     browser = await puppeteer.launch({
-        headless: false, args: ['--blink-settings=imagesEnabled=false','--fast-2g']
+        headless: false, args: ['--blink-settings=imagesEnabled=false', '--fast-2g']
     });
     page = await browser.newPage({ timeout: 0 });
     await page.setViewport({
@@ -26,7 +21,7 @@ async function startServer() {
     return { browser, page }
 }
 
-startServer()
+startServer();
 
 const playersMiddleware = (req, res, next) => {
     const includePlayers = req.query.players;
@@ -38,12 +33,9 @@ const playersMiddleware = (req, res, next) => {
     next();
 };
 
-// define um tempo limite de 60 segundos para a rota "/minha-rota"
-app.use('/team/:nome', timeout('60s'));
-
 // Rota para buscar um time pelo ID
 app.get('/team/:nome', playersMiddleware, async (req, res) => {
-    
+
     const nome = req.params.nome;
 
 
@@ -69,8 +61,8 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
     const playerRows = await page.$$(linhas_jogadores); // seleciona todos os elementos <tr> com a classe "starting"
 
     let players = [];
+    let player_page = await browser.newPage({ timeout: 0 });
     for (const row of playerRows) {
-        let player_page = await browser.newPage({ timeout: 0 });
         const playerLink = await row.$('td.col-name a'); // seleciona o elemento <a> com o link do jogador
         const playerPageUrl = await page.evaluate(link => link.href, playerLink);
 
@@ -89,8 +81,8 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
 
         players.push(player_info)
 
-        await player_page.close()
     }
+    await player_page.close()
 
     res.send(players)
 
