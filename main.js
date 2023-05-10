@@ -48,16 +48,16 @@ function getTeamInfo(){
 }
 
 function getPlayerInfo(){
-    
+
 }
 
 
 // Rota para buscar um time pelo ID
-app.get('/team/:nome', async (req, res) => {
+app.get('/team/:name', async (req, res) => {
 
-    const nome = req.params.nome;
+    const name = req.params.name;
 
-    const time = {}
+    const team = {}
 
 
     page.goto("https://sofifa.com/teams", { waitUntil: "networkidle2" })
@@ -67,17 +67,17 @@ app.get('/team/:nome', async (req, res) => {
     // espera pelo input ser encontrado na página
     await page.waitForSelector('[name="keyword"]');
 
-    console.log((nome).toString())
+    console.log((name).toString())
     // preenche o input com um valor
-    await page.type('[name="keyword"]', (nome).toString());
+    await page.type('[name="keyword"]', (name).toString());
 
     // pressiona a tecla Enter para enviar a pesquisa
     await page.keyboard.press('Enter');
 
 
     // encontra o link correspondente ao nome do time e clica nele
-    await page.waitForSelector(link_pagina_time = '.table > tbody > tr > td.col-name-wide > a');
-    await page.click(link_pagina_time);
+    await page.waitForSelector(team_page_url = '.table > tbody > tr > td.col-name-wide > a');
+    await page.click(team_page_url);
 
     // encontra lista de jogadores
     await page.waitForSelector('.list');
@@ -116,9 +116,6 @@ app.get('/team/:nome', async (req, res) => {
 
         let playersList = []
         for (const playerUrl of playersPageUrl) {
-            console.log(playerUrl)
-            contador++;
-
             await player_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do jogador
 
             let player_info = {};
