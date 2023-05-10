@@ -83,7 +83,7 @@ app.get('/team/:name', async (req, res) => {
     await page.waitForSelector('.list');
 
     // Nome 
-    time.name = await page.evaluate(() => {
+    team.name = await page.evaluate(() => {
         return document.querySelector('.center > h1').textContent;
     });
 
@@ -135,9 +135,9 @@ app.get('/team/:name', async (req, res) => {
 
         }
         await player_page.close()
-        time.players = playersList;
+        team.players = playersList;
     }
-    res.send(time)
+    res.send(team)
 
 
 });
