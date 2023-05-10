@@ -23,24 +23,18 @@ async function startServer() {
 
 startServer();
 
-const playersMiddleware = (req, res, next) => {
-    const includePlayers = req.query.players;
-    if (includePlayers) {
-        req.includePlayers = includePlayers.toLowerCase() === 'true';
-    } else {
-        req.includePlayers = false;
-    }
-    next();
-};
 
 // Rota para buscar um time pelo ID
-app.get('/team/:nome', playersMiddleware, async (req, res) => {
+app.get('/team/:nome', async (req, res) => {
 
     const nome = req.params.nome;
 
+    const time = {}
 
-    const url = "https://sofifa.com/teams"
-    page.goto(url)
+
+    page.goto("https://sofifa.com/teams", { waitUntil: "networkidle2" })
+
+
 
     // espera pelo input ser encontrado na página
     await page.waitForSelector('[name="keyword"]');
@@ -60,60 +54,65 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
     // encontra lista de jogadores
     await page.waitForSelector('.list');
 
-    // coleta o link dos jogador para ser acessado posteriormente
-    const playersPageUrl = await page.evaluate(() => {
-        const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
-            .map(row => row.querySelector('.col-name a').href);
-        return linksArray;
+    // Nome 
+    time.name = await page.evaluate(() => {
+        return document.querySelector('.center > h1').textContent;
     });
 
+    if (req.query.players === 'true') {
+        // coleta o link dos jogador para ser acessado posteriormente
+        const playersPageUrl = await page.evaluate(() => {
+            const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
+                .map(row => row.querySelector('.col-name a').href);
+            return linksArray;
+        });
 
-    // // abre uma nova aba para acessar página dos jogadores
 
-    contador = 0
-    let player_page = await browser.newPage();
+        // // abre uma nova aba para acessar página dos jogadores
 
-    await player_page.setRequestInterception(true);
+        contador = 0
+        let player_page = await browser.newPage();
 
-    // Intercepte cada solicitação de recurso
-    player_page.on('request', (request) => {
-        // Desative o carregamento de imagens e outros recursos desnecessários
-        if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
-            request.abort();
-        } else {
-            request.continue();
+        await player_page.setRequestInterception(true);
+
+        // Intercepte cada solicitação de recurso
+        player_page.on('request', (request) => {
+            // Desative o carregamento de imagens e outros recursos desnecessários
+            if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+                request.abort();
+            } else {
+                request.continue();
+            }
+        });
+
+
+        let playersList = []
+        for (const playerUrl of playersPageUrl) {
+            console.log(playerUrl)
+            contador++;
+
+            await player_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do jogador
+
+            let player_info = {};
+
+            // Nome 
+            player_info.name = await player_page.evaluate(() => {
+                return document.querySelector('.center > h1').textContent;
+            });
+
+            // Overall
+            player_info.overall = await player_page.evaluate(() => {
+                return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
+            });
+
+            playersList.push(player_info)
+
+
         }
-    });
-
-
-    let playersList = []
-    for (const playerUrl of playersPageUrl) {
-        console.time('loadTime')
-        console.log(playerUrl)
-        contador++;
-
-        await player_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do jogador
-
-        let player_info = {};
-
-        // Nome 
-        player_info.name = await player_page.evaluate(() => {
-            return document.querySelector('.center > h1').textContent;
-        });
-
-        // Overall
-        player_info.overall = await player_page.evaluate(() => {
-            return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span');
-        });
-
-        playersList.push(player_info)
-
-        console.timeEnd('loadTime');
-
+        await player_page.close()
+        time.players = playersList;
     }
-    await player_page.close()
-
-    res.send(playersList)
+    res.send(time)
 
 
     /*const team = teams.find((t) => t.id === id);
