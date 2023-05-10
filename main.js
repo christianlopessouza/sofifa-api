@@ -9,14 +9,14 @@ const port = 3000;
 let browser, page;
 async function startServer() {
     browser = await puppeteer.launch({
-        headless: false, args: ['--blink-settings=imagesEnabled=false', '--fast-2g']
+        headless: 'new'
     });
-    page = await browser.newPage({ timeout: 0 });
-    await page.setViewport({
-        width: 2000,
-        height: 1000,
-    });
-    await page.goto('https://www.sofifa.com');
+    page = await browser.newPage();
+
+    // await page.setViewport({
+    //     width: 2000,
+    //     height: 1000,
+    // });
     console.log('Server and browser started');
     return { browser, page }
 }
@@ -57,34 +57,48 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
     await page.waitForSelector(link_pagina_time = '.table > tbody > tr > td.col-name-wide > a');
     await page.click(link_pagina_time);
 
-    await page.waitForSelector(linhas_jogadores = 'tr.starting');
-    const playerRows = await page.$$(linhas_jogadores); // seleciona todos os elementos <tr> com a classe "starting"
+    // encontra lista de jogadores
+    await page.waitForSelector('.list');
 
-    let players = [];
-    let player_page = await browser.newPage({ timeout: 0 });
-    for (const row of playerRows) {
-        const playerLink = await row.$('td.col-name a'); // seleciona o elemento <a> com o link do jogador
-        const playerPageUrl = await page.evaluate(link => link.href, playerLink);
+    // coleta o link dos jogador para ser acessado posteriormente
+    const playersPageUrl = await page.evaluate(() => {
+        const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
+            .map(row => row.querySelector('.col-name a').href);
+        return linksArray;
+    });
 
-        await player_page.goto(playerPageUrl);
 
+    // // abre uma nova aba para acessar página dos jogadores
+
+    contador = 0
+    let player_page = await browser.newPage();
+
+
+    let playersList = []
+    for (const playerUrl of playersPageUrl) {
+        console.log(playerUrl)
+        contador++;
+
+        await player_page.goto(playerUrl,{waitUntil:"networkidle2"}) // acessa página do jogador
 
         let player_info = {};
 
+        // Nome 
         player_info.name = await player_page.evaluate(() => {
             return document.querySelector('.center > h1').textContent;
         });
 
+        // Overall
         player_info.overall = await player_page.evaluate(() => {
             return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span');
         });
 
-        players.push(player_info)
+        playersList.push(player_info)
 
     }
     await player_page.close()
 
-    res.send(players)
+    res.send(playersList)
 
 
     /*const team = teams.find((t) => t.id === id);
