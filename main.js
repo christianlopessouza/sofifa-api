@@ -1,6 +1,5 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
-const timeout = require('connect-timeout');
 const app = express();
 const port = 3000;
 
@@ -13,15 +12,44 @@ async function startServer() {
     });
     page = await browser.newPage();
 
-    // await page.setViewport({
-    //     width: 2000,
-    //     height: 1000,
-    // });
     console.log('Server and browser started');
     return { browser, page }
 }
 
 startServer();
+
+// Rota para buscar um time pelo ID
+app.get('/league/:id', async (req, res) => {
+    const league_id = req.params.id;
+
+    page.goto(`https://sofifa.com/teams?lg=${league_id}`, { waitUntil: "networkidle2" })
+
+    const teamsPageUrl = await page.evaluate(() => {
+        const linksArray = Array.from(document.querySelectorAll('tbody > tr'))
+                            .map(row => row.querySelector('.col-name-wide a').href);
+        return linksArray;
+    });
+
+    let team_page = await browser.newPage();
+
+    for (const teamUrl of teamsPageUrl) {
+        await team_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do time
+
+
+    }
+
+
+    const league = {}
+})
+
+
+function getTeamInfo(){
+
+}
+
+function getPlayerInfo(){
+    
+}
 
 
 // Rota para buscar um time pelo ID
@@ -115,16 +143,6 @@ app.get('/team/:nome', async (req, res) => {
     res.send(time)
 
 
-    /*const team = teams.find((t) => t.id === id);
-    if (!team) {
-        res.status(404).send('Time não encontrado');
-    } else {
-        const response = { id: team.id, name: team.name };
-        if (req.includePlayers) {
-            response.players = team.players;
-        }
-        res.send(response);
-    }*/
 });
 
 
