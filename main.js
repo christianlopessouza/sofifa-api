@@ -73,13 +73,26 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
     contador = 0
     let player_page = await browser.newPage();
 
+    await player_page.setRequestInterception(true);
+
+    // Intercepte cada solicitação de recurso
+    player_page.on('request', (request) => {
+        // Desative o carregamento de imagens e outros recursos desnecessários
+        if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+            request.abort();
+        } else {
+            request.continue();
+        }
+    });
+
 
     let playersList = []
     for (const playerUrl of playersPageUrl) {
+        console.time('loadTime')
         console.log(playerUrl)
         contador++;
 
-        await player_page.goto(playerUrl,{waitUntil:"networkidle2"}) // acessa página do jogador
+        await player_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do jogador
 
         let player_info = {};
 
@@ -94,6 +107,8 @@ app.get('/team/:nome', playersMiddleware, async (req, res) => {
         });
 
         playersList.push(player_info)
+
+        console.timeEnd('loadTime');
 
     }
     await player_page.close()
