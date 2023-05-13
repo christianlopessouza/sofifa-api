@@ -8,7 +8,7 @@ const port = 3000;
 let browser, page;
 async function startServer() {
     browser = await puppeteer.launch({
-        headless: 'new'
+        headless: false
     });
     page = await browser.newPage();
 
@@ -26,7 +26,7 @@ app.get('/league/:id', async (req, res) => {
 
     const teamsPageUrl = await page.evaluate(() => {
         const linksArray = Array.from(document.querySelectorAll('tbody > tr'))
-                            .map(row => row.querySelector('.col-name-wide a').href);
+            .map(row => row.querySelector('.col-name-wide a').href);
         return linksArray;
     });
 
@@ -43,14 +43,50 @@ app.get('/league/:id', async (req, res) => {
 })
 
 
-function getTeamInfo(){
+function getTeamInfo() {
 
 }
 
-function getPlayerInfo(){
+async function getPlayerInfo(params) {
+    let by_url = !(typeof params.url === 'undefined');
 
+
+
+    let url = (by_url) ? params.url : `https://sofifa.com/players?keyword=${params.query}`;
+
+    if (typeof player_page === 'undefined') player_page = await browser.newPage();
+
+    await player_page.goto(url, { waitUntil: "networkidle2" });
+    console.log("BIRINBOCA",by_url);
+    if (!by_url) {
+        console.log("pesquisa")
+        await player_page.waitForSelector('.table > tbody > tr > td.col-name > a');
+        await player_page.click('.table > tbody > tr > td.col-name > a');
+
+    }
+
+    let player_info = {};
+
+    await player_page.waitForNavigation({ waitUntil: "networkidle2" }); // espera a página carregar
+    // Nome 
+    player_info.name = await player_page.evaluate(() => {
+        return document.querySelector('.center > h1').textContent;
+    });
+
+    // Overall
+    player_info.overall = await player_page.evaluate(() => {
+        return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
+    });
+
+
+
+    return player_info;
 }
+//playersList.push(player_info)
 
+app.get('/player', async (req, res) => {
+    res.send(await getPlayerInfo(req.query));
+})
 
 // Rota para buscar um time pelo ID
 app.get('/team/:name', async (req, res) => {
@@ -99,7 +135,10 @@ app.get('/team/:name', async (req, res) => {
         // // abre uma nova aba para acessar página dos jogadores
 
         contador = 0
-        let player_page = await browser.newPage();
+        if (typeof player_page === 'undefined') {
+            player_page = await browser.newPage();
+
+        }
 
         await player_page.setRequestInterception(true);
 
@@ -116,21 +155,7 @@ app.get('/team/:name', async (req, res) => {
 
         let playersList = []
         for (const playerUrl of playersPageUrl) {
-            await player_page.goto(playerUrl, { waitUntil: "networkidle2" }) // acessa página do jogador
-
-            let player_info = {};
-
-            // Nome 
-            player_info.name = await player_page.evaluate(() => {
-                return document.querySelector('.center > h1').textContent;
-            });
-
-            // Overall
-            player_info.overall = await player_page.evaluate(() => {
-                return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
-            });
-
-            playersList.push(player_info)
+            /*REMOVI DAQUI*/
 
 
         }
