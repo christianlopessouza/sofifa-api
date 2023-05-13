@@ -8,7 +8,12 @@ const port = 3000;
 let browser, page;
 async function startServer() {
     browser = await puppeteer.launch({
-        headless: false
+        headless: false,
+        args: [
+            '--disable-dev-shm-usage',
+            '--blink-settings=imagesEnabled=false',
+            '--disable-extensions'
+        ]
     });
     page = await browser.newPage();
 
@@ -43,43 +48,118 @@ app.get('/league/:id', async (req, res) => {
 })
 
 
-function getTeamInfo() {
+async function getTeamInfo(params) {
+    const name = params.name;
+    console.log(params)
+    console.log((name).toString())
 
+    // verifica se já existe instancia da pagina
+    if (typeof team_page === 'undefined') team_page = await browser.newPage();
+
+    await team_page.setRequestInterception(true); // desativar interceptação de solicitações temporariamente
+
+    team_page.on('request', (request) => {
+        // Desative o carregamento de imagens e outros recursos desnecessários
+        if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+            request.abort();
+        } else {
+            request.continue();
+        }
+    });
+
+
+    // procura equipe no lobby de pesquisa
+    await team_page.goto(`https://sofifa.com/teams?keyword=${name}`, { waitUntil: "networkidle2" })
+
+
+
+    // encontra o link correspondente ao nome do time e clica nele
+    await team_page.waitForSelector(team_page_url = '.table > tbody > tr > td.col-name-wide > a');
+    await team_page.click(team_page_url);
+    await team_page.waitForSelector('.center > h1'); // espera a página carregar
+
+    const team = {}
+
+    team.name = await team_page.evaluate(() => {
+        return document.querySelector('.center > h1').textContent;
+    });
+
+
+
+    if (typeof params.players !== 'undefined') {
+        // coleta o link dos jogador para ser acessado posteriormente
+        const playersPageUrl = await team_page.evaluate(() => {
+            const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
+                .map(row => row.querySelector('.col-name a').href);
+            return linksArray;
+        });
+
+
+        const playersListPromises = playersPageUrl.map((playerUrl) => {
+            return getPlayerInfo({ url: playerUrl });
+        });
+
+        const playersList = await Promise.all(playersListPromises);
+
+
+        team.players = playersList;
+    }
+
+    return team;
 }
 
+
+player_page = []
+global_cont = 0;
 async function getPlayerInfo(params) {
+
     let by_url = !(typeof params.url === 'undefined');
 
 
 
     let url = (by_url) ? params.url : `https://sofifa.com/players?keyword=${params.query}`;
 
-    if (typeof player_page === 'undefined') player_page = await browser.newPage();
+    if (typeof player_page[global_cont] === 'undefined') {
+        player_page[global_cont] = await browser.newPage();
 
-    await player_page.goto(url, { waitUntil: "networkidle2" });
-    console.log("BIRINBOCA",by_url);
-    if (!by_url) {
-        console.log("pesquisa")
-        await player_page.waitForSelector('.table > tbody > tr > td.col-name > a');
-        await player_page.click('.table > tbody > tr > td.col-name > a');
+        await player_page[global_cont].setRequestInterception(true);
+
+        // Intercepte cada solicitação de recurso
+        player_page[global_cont].on('request', (request) => {
+            // Desative o carregamento de imagens e outros recursos desnecessários
+            if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+                request.abort();
+            } else {
+                request.continue();
+            }
+        });
 
     }
 
+    await player_page[global_cont].goto(url, { waitUntil: "networkidle2" });
+
+    if (!by_url) {
+        await player_page[global_cont].waitForSelector('.table > tbody > tr > td.col-name > a');
+        await player_page[global_cont].click('.table > tbody > tr > td.col-name > a');
+    }
+
+
     let player_info = {};
 
-    await player_page.waitForNavigation({ waitUntil: "networkidle2" }); // espera a página carregar
+    await player_page[global_cont].waitForSelector('.center > h1');
+
     // Nome 
-    player_info.name = await player_page.evaluate(() => {
+    player_info.name = await player_page[global_cont].evaluate(() => {
         return document.querySelector('.center > h1').textContent;
     });
 
     // Overall
-    player_info.overall = await player_page.evaluate(() => {
+    player_info.overall = await player_page[global_cont].evaluate(() => {
         return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
     });
 
 
-
+    global_cont++;
     return player_info;
 }
 //playersList.push(player_info)
@@ -90,81 +170,12 @@ app.get('/player', async (req, res) => {
 
 // Rota para buscar um time pelo ID
 app.get('/team/:name', async (req, res) => {
-
     const name = req.params.name;
+    const search_player = req.query.players;
 
-    const team = {}
+    const team = await getTeamInfo({ 'name': name, 'players': search_player });
 
-
-    page.goto("https://sofifa.com/teams", { waitUntil: "networkidle2" })
-
-
-
-    // espera pelo input ser encontrado na página
-    await page.waitForSelector('[name="keyword"]');
-
-    console.log((name).toString())
-    // preenche o input com um valor
-    await page.type('[name="keyword"]', (name).toString());
-
-    // pressiona a tecla Enter para enviar a pesquisa
-    await page.keyboard.press('Enter');
-
-
-    // encontra o link correspondente ao nome do time e clica nele
-    await page.waitForSelector(team_page_url = '.table > tbody > tr > td.col-name-wide > a');
-    await page.click(team_page_url);
-
-    // encontra lista de jogadores
-    await page.waitForSelector('.list');
-
-    // Nome 
-    team.name = await page.evaluate(() => {
-        return document.querySelector('.center > h1').textContent;
-    });
-
-    if (req.query.players === 'true') {
-        // coleta o link dos jogador para ser acessado posteriormente
-        const playersPageUrl = await page.evaluate(() => {
-            const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
-                .map(row => row.querySelector('.col-name a').href);
-            return linksArray;
-        });
-
-
-        // // abre uma nova aba para acessar página dos jogadores
-
-        contador = 0
-        if (typeof player_page === 'undefined') {
-            player_page = await browser.newPage();
-
-        }
-
-        await player_page.setRequestInterception(true);
-
-        // Intercepte cada solicitação de recurso
-        player_page.on('request', (request) => {
-            // Desative o carregamento de imagens e outros recursos desnecessários
-            if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
-                request.abort();
-            } else {
-                request.continue();
-            }
-        });
-
-
-        let playersList = []
-        for (const playerUrl of playersPageUrl) {
-            /*REMOVI DAQUI*/
-
-
-        }
-        await player_page.close()
-        team.players = playersList;
-    }
     res.send(team)
-
-
 });
 
 
