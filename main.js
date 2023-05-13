@@ -54,18 +54,22 @@ async function getTeamInfo(params) {
     console.log((name).toString())
 
     // verifica se já existe instancia da pagina
-    if (typeof team_page === 'undefined') team_page = await browser.newPage();
+    if (typeof team_page === 'undefined') {
+        team_page = await browser.newPage();
 
-    await team_page.setRequestInterception(true); // desativar interceptação de solicitações temporariamente
+        await team_page.setRequestInterception(true); // desativar interceptação de solicitações temporariamente
 
-    team_page.on('request', (request) => {
-        // Desative o carregamento de imagens e outros recursos desnecessários
-        if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
-            request.abort();
-        } else {
-            request.continue();
-        }
-    });
+        team_page.on('request', (request) => {
+            // Desative o carregamento de imagens e outros recursos desnecessários
+            if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+                request.abort();
+            } else {
+                request.continue();
+            }
+        });
+    }
+
+
 
 
     // procura equipe no lobby de pesquisa
@@ -87,6 +91,7 @@ async function getTeamInfo(params) {
 
 
     if (typeof params.players !== 'undefined') {
+
         // coleta o link dos jogador para ser acessado posteriormente
         const playersPageUrl = await team_page.evaluate(() => {
             const linksArray = Array.from(document.querySelectorAll('.list')[0].querySelectorAll('.list > tr'))
@@ -100,9 +105,12 @@ async function getTeamInfo(params) {
         });
 
         const playersList = await Promise.all(playersListPromises);
+        player_page = [];
+
 
 
         team.players = playersList;
+
     }
 
     return team;
@@ -112,55 +120,69 @@ async function getTeamInfo(params) {
 player_page = []
 global_cont = 0;
 async function getPlayerInfo(params) {
+    console.log(params)
+    try {
 
-    let by_url = !(typeof params.url === 'undefined');
+
+        let by_url = !(typeof params.url === 'undefined');
 
 
 
-    let url = (by_url) ? params.url : `https://sofifa.com/players?keyword=${params.query}`;
+        let url = (by_url) ? params.url : `https://sofifa.com/players?keyword=${params.query}`;
 
-    if (typeof player_page[global_cont] === 'undefined') {
-        player_page[global_cont] = await browser.newPage();
+        if (typeof player_page[params.url] === 'undefined') {
 
-        await player_page[global_cont].setRequestInterception(true);
+            player_page[params.url] = await browser.newPage();
+            if (!player_page[params.url].isInterceptionEnabled) {
 
-        // Intercepte cada solicitação de recurso
-        player_page[global_cont].on('request', (request) => {
-            // Desative o carregamento de imagens e outros recursos desnecessários
-            if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
-                request.abort();
-            } else {
-                request.continue();
+                await player_page[params.url].setRequestInterception(true);
+                player_page[params.url].isInterceptionEnabled = true;
+                player_page[params.url].on('request', (request) => {
+                    // Desative o carregamento de imagens e outros recursos desnecessários
+                    if (['image', 'stylesheet', 'font', 'script'].indexOf(request.resourceType()) !== -1) {
+                        request.abort();
+                    } else {
+                        request.continue();
+                    }
+                });
             }
+
+
+
+        }
+
+        await player_page[params.url].goto(url, { waitUntil: "networkidle2" });
+
+        if (!by_url) {
+            await player_page[params.url].waitForSelector('.table > tbody > tr > td.col-name > a');
+            await player_page[params.url].click('.table > tbody > tr > td.col-name > a');
+        }
+
+
+        let player_info = {};
+
+        await player_page[params.url].waitForSelector('.center > h1');
+
+        // Nome 
+        player_info.name = await player_page[params.url].evaluate(() => {
+            return document.querySelector('.center > h1').textContent;
         });
 
+        // Overall
+        player_info.overall = await player_page[params.url].evaluate(() => {
+            return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
+        });
+
+        await player_page[params.url].setRequestInterception(false);
+
+        await player_page[params.url].close();
+
+        return player_info;
+    } catch (error) {
+        console.log(error)
+        return null;
+
     }
-
-    await player_page[global_cont].goto(url, { waitUntil: "networkidle2" });
-
-    if (!by_url) {
-        await player_page[global_cont].waitForSelector('.table > tbody > tr > td.col-name > a');
-        await player_page[global_cont].click('.table > tbody > tr > td.col-name > a');
-    }
-
-
-    let player_info = {};
-
-    await player_page[global_cont].waitForSelector('.center > h1');
-
-    // Nome 
-    player_info.name = await player_page[global_cont].evaluate(() => {
-        return document.querySelector('.center > h1').textContent;
-    });
-
-    // Overall
-    player_info.overall = await player_page[global_cont].evaluate(() => {
-        return document.querySelectorAll('.spacing .block-quarter')[0].querySelector('span').textContent;
-    });
-
-
-    global_cont++;
-    return player_info;
 }
 //playersList.push(player_info)
 
