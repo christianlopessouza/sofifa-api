@@ -8,7 +8,7 @@ const port = 3000;
 let browser, page;
 async function startServer() {
     browser = await puppeteer.launch({
-        headless: false,
+        headless: 'new',
         args: [
             '--disable-dev-shm-usage',
             '--blink-settings=imagesEnabled=false',
